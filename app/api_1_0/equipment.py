@@ -88,40 +88,18 @@ def new_equipment():
 @permission_required(Permission.MODULE_PERMISSION_DICT['equipment']['approve'])
 def edit_equipment(id):
     equip = Equipment.query.get_or_404(id)
-
-    equip_json = request.get_json()
-    if equip_json is None:
+    request_json = request.get_json()
+    if request_json is None:
         return jsonify({
                 'error' : 1,
                 'msg' : u'不是application/json类',
                 'data' : {}
                 }), 403
-    print equip_json
-    if equip_json.get('stdid') is not None:
-        equip.info = equip_json['stdid']
-    if equip_json.get('info') is not None:
-        equip.info = equip_json['info']
-    if equip_json.get('abbr') is not None:
-        equip.abbr = equip_json['abbr']
-    if equip_json.get('type') is not None:
-        equip.type = equip_json['type']
-    if equip_json.get('spec') is not None:
-        equip.spec = equip_json['spec']
-    if equip_json.get('model') is not None:
-        equip.model = equip_json['model']
-    if equip_json.get('producer') is not None:
-        equip.producer = equip_json['producer']
-    if equip_json.get('create_user') is not None:
-        equip.create_user = equip_json['create_user']
-    if equip_json.get('approve_user') is not None:
-        equip.approve = equip_json['approve_user']
+    print request_json
 
-    a = {}
-    for item in equip_json:
-        if item != 'id' and item != 'state' and item !='create_user' and item !='approve_user' and item != 'stdid':
-            a[item] = equip_json[item]
-    equip.accessory = json.dumps(a)
-
+    equip.json_modify_obj(request_json)
+    equip.last_modify_user_id = g.current_user.id
+    equip.last_modify_date = datetime.datetime.now()
     db.session.commit()
 
     return jsonify({
@@ -134,25 +112,13 @@ def edit_equipment(id):
 @api.route('/equipment/approve/<int:id>', methods=['GET', 'POST'])
 @permission_required(Permission.MODULE_PERMISSION_DICT['equipment']['approve'])
 def approve_new_equipment(id):
+    #TODO state判断
     equip = Equipment.query.get(id)
     if equip is None:
         return bad_request('no such a equipment')
-
-    try:
-        if request:
-            equip_json = request.get_json()
-            if equip_json.get('approve_user') is not None:
-                equip.approve_user = equip_json['approve_user']
-        if equip.approve_user is None:
-            equip.approve_user = g.current_user.id
-    except Exception, e:
-        print e
-        return jsonify({
-                'error' : 1,
-                'msg' : 'approve_user cannot get',
-                'data' : ''
-                })
-
+    equip.approve_user_id = g.current_user.id
+    equip.approve_date = datetime.datetime.now()
+    #TODO state设计
     equip.state = 0
     db.session.commit()
     return jsonify({
@@ -175,6 +141,7 @@ def delete_equipment(id):
             'data' : {}
             })
 
+#TODO get_store api
 @api.route('/equipment/get_store/<int:id>', methods=['GET', 'POST'])
 @permission_required(Permission.MODULE_PERMISSION_DICT['store']['write'])
 def get_store_equipoment(id):

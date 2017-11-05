@@ -9,16 +9,30 @@ import json
 import datetime
 import os
 
+#datetime.datetime object to string
 def datetime2str(date):
     if type(date) != datetime.datetime:
         raise TypeError('use datetime2str but input is not datetime.datime object')
     return datetime.datetime.strftime(date, '%Y-%m-%d %H:%M:%S')
 
+#string to datetime.datetime object
 def str2datetime(date_str):
     date = datetime.datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
     return date
 
+#string to boolean
+def str2boolean(bool_str):
+    if type(bool_str) == int:
+        return bool(bool_str)
+    elif type(bool_str) == str or type(bool_str) == unicode:
+        if bool_str.upper() == 'FALSE':
+            return False
+        elif bool_str.upper() == 'TRUE':
+            return True
+    else:
+        return bool(bool_str)
 
+#one db object to a dict(can be jsonify)
 def model2json(inst, cls):
     convert = {
         datetime.datetime : datetime2str
@@ -37,10 +51,14 @@ def model2json(inst, cls):
             d[c.name] = v
     return d
 
+#json object to a db class (cls)
+#cls class
+#*args, **kw, used to build a cls(*args, **kw)
 def json2model(json_obj, cls, *args, **kw):
     obj = cls(*args, **kw)
     convert = {
-        'INTEGER' : str2datetime
+        'INTEGER' : str2datetime,
+        'BOOLEAN' : str2boolean
     }
     for c in cls.__table__.columns:
         if c.name in json_obj:
@@ -52,6 +70,72 @@ def json2model(json_obj, cls, *args, **kw):
             else:
                 setattr(obj, c.name, json_obj[c.name])
     return obj
+
+def json_modify_model(json_obj, db_obj):
+    headers = db_obj.__class__.get_ordered_headers()
+    convert = {
+        'INTEGER' : str2datetime,
+        'BOOLEAN' : str2boolean
+    }
+    header_dict = {}
+    #set for attribute
+    for header in headers:
+        header_dict[header[0]] = {'immutable': False}
+        if len(header) > 2 and header[2] == 'immutable':
+            header_dict[header[0]]['immutable'] = True
+    for k, v in json_obj.iteritems():
+        #can modify
+        for c in db_obj.__class__.__table__.columns:
+            if c.name in json_obj and header_dict[c.name]['immutable'] == False:
+                if str(c.type) in convert.keys():
+                    try:
+                        setattr(db_obj, c.name, convert[str(c.type)](json_obj[c.name]))
+                    except:
+                        raise TypeError("invalid type used for json2model name[{}],value[{}],type[{}]".format(c.name, json_obj[c.name], str(c.type)))
+                else:
+                    setattr(db_obj, c.name, json_obj[c.name])
+
+#Equipment的状态转移类
+class EquipmentState(object):
+    STATES = (u'录入成功', u'审批成功') 
+    STATE_DICT = {}
+    _index = 0
+    for state in STATES:
+        STATE_DICT[state] = _index
+        _index += 1
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def first_state():
+        return EquipmentState.STATES[0]
+    
+    @staticmethod
+    def next_state(state):
+        if type(state) == str:
+            state = unicode(state, 'utf-8')
+        if state in EquipmentState.STATE_DICT.keys():
+            idx = EquipmentState.STATE_DICT[state]
+            if (idx + 1) == len(EquipmentState.STATES):
+                return None #mean the last state 
+            else:
+                return EquipmentState.STATES[idx + 1]
+        else:
+            raise ValueError('invalid state[{}], no in state list'.format(state))
+
+    @staticmethod
+    def previous_state(state):
+        if type(state) == str:
+            state = unicode(state, 'utf-8')
+        if state in EquipmentState.STATE_DICT.keys():
+            idx = EquipmentState.STATE_DICT[state]
+            if idx == 0:
+                return None #mean the last state 
+            else:
+                return EquipmentState.STATES[idx - 1]
+        else:
+            raise ValueError('invalid state[{}], no in state list'.format(state))
 
 
 class Equipment(db.Model):
@@ -104,6 +188,7 @@ class Equipment(db.Model):
         self.ceate_date = create_date
         self.approve_date = approve_date
         self.last_modify_date = last_modify_date
+        self.state = 1
     
     def to_json(self):
         equipment_json = model2json(self, self.__class__)
@@ -112,12 +197,15 @@ class Equipment(db.Model):
         if self.approve_user is not None:
             equipment_json['approve_user'] = self.approve_user.to_json()
         equipment_json['last_modify_user'] = self.last_modify_user.to_json()
-        return json.dumps(equipment_json)
+        return equipment_json
 
     @staticmethod
     def json2obj(json_obj):
         obj = json2model(json_obj, Equipment)
         return obj
+    
+    def json_modify_obj(self, json_obj):
+        json_modify_model(json_obj, self)
     
     def get_name(self):
         ret = ""
@@ -198,23 +286,13 @@ class Equipment(db.Model):
         ('certificate_expiration_date', '产品注册证到期日期'),
         ('audit_material_accessories', '审核材料附件'),
         ('is_cold_chain', '是否冷链'),
-        ('create_user', '创建人'),
-        ('create_date', '创建时间'),
-        ('last_modify_user', '最后修改人'),
-        ('last_modify_date', '最后修改时间'),
-        ('approve_user', '审批人'),
-        ('approve_date', '审批时间')
-#('流程编号', '流程编号'),
+        ('create_user', '创建人', 'immutable'),
+        ('create_date', '创建时间', 'immutable'),
+        ('last_modify_user', '最后修改人', 'immutable'),
+        ('last_modify_date', '最后修改时间', 'immutable'),
+        ('approve_user', '审批人', 'immutable'),
+        ('approve_date', '审批时间', 'immutable')
         ]
-#return [('id', u'产品编号'),
-#            ('info', u'产品信息'),
-#            ('abbr' , u'产品简称'),
-#            ('type', u'产品分类', 'option', [u'设备', u'试剂', u'耗材']),
-#            ('spec' , u'产品规格'),
-#            ('model', u'产品型号'),
-#            ('producer', u'厂家'),
-#            ('state', u'当前状态'),
-#        ]
 
 class Enterprise(db.Model):
     __tablename__ = 'enterprise'
@@ -1088,7 +1166,8 @@ class User(db.Model):
 
     def to_json(self):
         user_json = model2json(self, self.__class__)
-        return json.dumps(user_json)
+        user_json.pop('password_hash', None)
+        return user_json
 
     def verify_password(self, password):
         return check_password_hash(self.password_hash, password)
