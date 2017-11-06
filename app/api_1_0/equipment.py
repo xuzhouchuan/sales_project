@@ -23,12 +23,12 @@ def get_equipment_headers():
 @api.route('/equipment', methods=['GET'])
 @permission_required(Permission.MODULE_PERMISSION_DICT['equipment']['read'])
 def get_equipments():
-    state = int(request.args.get('state')) if request.args.get('state') is not None else None
+    state = int(request.args.get('approve_state')) if request.args.get('approve_state') is not None else None
     equips = []
     if state is None:
         equips = Equipment.query.all()
     else:
-        equips = Equipment.query.filter_by(state=state).all()
+        equips = Equipment.query.filter_by(approve_state=state).all()
     return jsonify({
             'error' : 0,
             'msg' : '',
@@ -112,14 +112,14 @@ def edit_equipment(id):
 @api.route('/equipment/approve/<int:id>', methods=['GET', 'POST'])
 @permission_required(Permission.MODULE_PERMISSION_DICT['equipment']['approve'])
 def approve_new_equipment(id):
-    #TODO state判断
+    #TODO approve_state判断
     equip = Equipment.query.get(id)
     if equip is None:
         return bad_request('no such a equipment')
     equip.approve_user_id = g.current_user.id
     equip.approve_date = datetime.datetime.now()
-    #TODO state设计
-    equip.state = 0
+    #TODO approve_state设计
+    equip.approve_state = 0
     db.session.commit()
     return jsonify({
             'error' : 0,

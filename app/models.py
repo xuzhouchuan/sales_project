@@ -64,7 +64,7 @@ def json2model(json_obj, cls, *args, **kw):
         if c.name in json_obj:
             if str(c.type) in convert.keys():
                 try:
-                    setattr(obj, c.name, convert[str(c.type)](json_obj[c.name]))    
+                    setattr(obj, c.name, convert[str(c.type)](json_obj[c.name])) 
                 except:
                     raise TypeError("invalid type used for json2model name[{}],value[{}],type[{}]".format(c.name, json_obj[c.name], str(c.type)))
             else:
@@ -95,9 +95,9 @@ def json_modify_model(json_obj, db_obj):
                 else:
                     setattr(db_obj, c.name, json_obj[c.name])
 
-#Equipment的状态转移类
-class EquipmentState(object):
-    STATES = (u'录入成功', u'审批成功') 
+#Equipment/Enterprise/Customer的审批状态转移类
+class ApproveState(object):
+    STATES = (u'待审批', u'审批成功') 
     STATE_DICT = {}
     _index = 0
     for state in STATES:
@@ -140,32 +140,31 @@ class EquipmentState(object):
 
 class Equipment(db.Model):
     __tablename__ = 'equipment'
-    id = db.Column(db.Integer, primary_key=True)#产品ID
-    stdid = db.Column(db.String(256))#产品编号
-    #info = db.Column(db.String(256))#产品信息
-    name = db.Column(db.String(1024))#名称
-    abbr = db.Column(db.String(256))#产品简称
-    english_name = db.Column(db.String(256))#英文名
-    standard_code = db.Column(db.String(256))#医疗器械标准码
-    standard_catagory = db.Column(db.String(256))#医疗器械分类
-    spec = db.Column(db.String(256))#产品规格
-    model = db.Column(db.String(256))#产品型号
-    type = db.Column(db.String(256))#产品类型，可选的类型
-    unit = db.Column(db.String(256))#单位
-    producer = db.Column(db.String(256))#产品厂家
-    certificate_expiration_date = db.Column(db.DateTime)#产品注册证到期日期
-    audit_material_accessories = db.Column(db.Text)#审核材料附件
-    is_cold_chain = db.Column(db.Boolean)#是否冷链
+    id = db.Column(db.Integer, primary_key=True, doc=u'编号', info={'name': u'编号', 'immutable': True, 'options': None})#产品ID
+    stdid = db.Column(db.String(256), doc=u'产品编号', info={'name': u'产品编号', 'immutable': False, 'options': None})#产品编号
+    name = db.Column(db.String(1024), doc=u'名称', info={'name': u'名称', 'immutable': False, 'options': None})#名称
+    abbr = db.Column(db.String(256), doc=u'产品简称', info={'name': u'产品简称', 'immutable': False, 'options': None})#产品简称
+    english_name = db.Column(db.String(256), doc=u'英文名', info={'name': u'英文名', 'immutable': False, 'options': None})#英文名
+    standard_code = db.Column(db.String(256), doc=u'医疗器械标准码', info={'name': u'医疗器械标准码', 'immutable': False, 'options':None})#医疗器械标准码
+    standard_catagory = db.Column(db.String(256), doc=u'医疗器械分类', info={'name': u'医疗器械分类', 'immutable': False, 'options':None})#医疗器械分类
+    spec = db.Column(db.String(256), doc=u'产品规格', info={'name':u'产品规格','immutable':False,'options':None})#产品规格
+    model = db.Column(db.String(256), doc=u'产品型号', info={'name':u'产品型号','immutable':False,'options':None})#产品型号
+    type = db.Column(db.String(256), doc=u'产品类型', info={'name':u'产品类型','immutable':False,'options':[u'设备',u'试剂',u'耗材']})#产品类型，可选的类型
+    unit = db.Column(db.String(256), doc=u'单位', info={'name':u'单位','immutable':False,'options':None})#单位
+    producer = db.Column(db.String(256), doc=u'产品厂家', info={'name':u'产品厂家','immutable':False,'options':None})#产品厂家
+    certificate_expiration_date = db.Column(db.DateTime, doc=u'产品注册证到期日期', info={'name':u'产品注册证到期日期','immutable':False,'options':None})#产品注册证到期日期
+    audit_material_accessories = db.Column(db.Text, doc=u'审核材料附件', info={'name':u'审核材料附件','immutable':False,'options':None})#审核材料附件
+    is_cold_chain = db.Column(db.Boolean, doc=u'是否冷链', info={'name':u'是否冷链', 'immutable':False,'options':None})#是否冷链
     create_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     create_user = db.relationship('User', backref=db.backref('create_equipments', lazy=True), foreign_keys=[create_user_id])
-    create_date = db.Column(db.DateTime)
+    create_date = db.Column(db.DateTime, doc=u'创建日期', info={'name':u'创建日期','immutable':True,'options':None})
     last_modify_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     last_modify_user = db.relationship('User', backref=db.backref('modify_equipments', lazy=True), foreign_keys=[last_modify_user_id])
     last_modify_date = db.Column(db.DateTime)
     approve_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     approve_user = db.relationship('User', backref=db.backref('approve_equipments', lazy=True), foreign_keys=[approve_user_id])
     approve_date = db.Column(db.DateTime)
-    state = db.Column(db.Integer) #当前的状态 0:正常状态， 1:需要审批状态
+    approve_state = db.Column(db.Integer) #当前的状态 0:正常状态， 1:需要审批状态
 
     def __init__(self, stdid=None, name=None, abbr=None, english_name=None, standard_code=None, standard_category=None, type=None, spec=None, model=None, unit=None, producer=None, certificate_expiration_date=None, audit_material_accessories=None, is_cold_chain=None, create_user_id=None, approve_user_id=None, modify_user_id=None, create_date=None, approve_date=None, last_modify_date=None):
         self.stdid = stdid
@@ -188,7 +187,7 @@ class Equipment(db.Model):
         self.ceate_date = create_date
         self.approve_date = approve_date
         self.last_modify_date = last_modify_date
-        self.state = 1
+        self.approve_state = 1
     
     def to_json(self):
         equipment_json = model2json(self, self.__class__)
@@ -207,67 +206,6 @@ class Equipment(db.Model):
     def json_modify_obj(self, json_obj):
         json_modify_model(json_obj, self)
     
-    def get_name(self):
-        ret = ""
-        if self.accessory is not None:
-            x = json.loads(self.accessory)
-            for key,value in x.items():
-                if key == u'简称' and value is not None and len(value) > 0:
-                    ret = value
-                if key == u'名称' and value is not None and len(value) > 0 and ret == "":
-                    ret = value
-        if self.info is not None and len(self.info) > 0 and ret == "":
-            ret = self.info
-
-        return ret
-
-    def get_producer_name(self):
-        ret = ""
-        if self.accessory is not None:
-            x = json.loads(self.accessory)
-            for key,value in x.items():
-                if key == u'生产厂商' and value is not None and len(value) > 0:
-                    ret = value
-        if self.producer is not None and len(self.producer) > 0 and ret == "":
-            ret = self.producer
-
-        return ret
-
-    def get_spec(self):
-        ret = ""
-        if self.accessory is not None:
-            x = json.loads(self.accessory)
-            for key,value in x.items():
-                if key == u'产品规格' and value is not None and len(value) > 0:
-                    ret = value
-        if self.spec is not None and len(self.spec) > 0 and ret == "":
-            ret = self.spec
-
-        return ret
-        
-    def get_model(self):
-        ret = ""
-        if self.accessory is not None:
-            x = json.loads(self.accessory)
-            for key,value in x.items():
-                if key == u'产品型号' and value is not None and len(value) > 0:
-                    ret = value
-        if self.model is not None and len(self.model) > 0 and ret == "":
-            ret = self.model
-
-        return ret
-    
-    @staticmethod
-    def get_headers():
-        return { 'id' : u'产品编号',
-            'info' : u'产品信息',
-            'abbr' : u'产品简称',
-            'type' : u'产品分类',
-            'spec' : u'产品规格',
-            'model' : u'产品型号',
-            'producer' : u'厂家',
-            'state' : u'当头状态'
-        }
     @staticmethod
     def get_ordered_headers():
         return [
@@ -297,117 +235,120 @@ class Equipment(db.Model):
 class Enterprise(db.Model):
     __tablename__ = 'enterprise'
     id = db.Column(db.Integer, primary_key=True)#首营企业编号
-    name = db.Column(db.String(256))#供应商名称
-    register_capital = db.Column(db.Integer)#注册资金
     abbr = db.Column(db.String(256))#简称
-    type = db.Column(db.String(256))#供应商类型(设备/试剂/耗材等)
-    ever_name = db.Column(db.String(256))#曾用名
-    legal_representor = db.Column(db.String(256))#法人代表
-    location = db.Column(db.String(1024))#住所
-    establish_date = db.Column(db.Date)#成立日期
-    accessory = db.Column(db.String(10240)) #json
-    create_user = db.Column(db.Integer)
-    approve_user = db.Column(db.Integer)
-    state = db.Column(db.Integer)
-#files = db.Column(db.String(256))#资质文件名
-
-    def __init__(self, name, register_capital, abbr, type, ever_name, legal_representor, location, establish_date, accessory, create_user, approve_user):
-        self.name = name
-        self.register_capital = register_capital
-        self.abbr = abbr
-        self.type = type
-        self.ever_name = ever_name
-        self.legal_representor = legal_representor
-        self.location = location
-        self.establish_date = establish_date
-        self.accessory = accessory
-        self.create_user = create_user
-        self.approve_user = approve_user
-        self.state = 0
+    name = db.Column(db.String(256))#名称
+    attribution_location = db.Column(db.String(256))#归属地
+    state = db.Column(db.String(256))#状态
+    medical_instrument_business_scope = db.Column(db.String(1024))#医疗器械经营范围
+    category = db.Column(db.String(256))#分类
+    business_scope = db.Column(db.String(1024))#经营范围
+    contact_person = db.Column(db.String(256))#联系人
+    contact_phone_number = db.Column(db.String(256))#电话
+    contact_mobilephone_number = db.Column(db.String(256))#手机
+    location = db.Column(db.String(1024))#地址
+    fax_number = db.Column(db.String(256))#传真
+    email = db.Column(db.String(256))#邮箱
+    website = db.Column(db.String(1024))#网址
+    currency_type = db.Column(db.String(256))#币种
+    carriage_way = db.Column(db.String(256))#承运方式
+    settle_account_way = db.Column(db.String(256))#结算方式
+    settle_unit = db.Column(db.String(256))#结算单位
+    create_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    create_user = db.relationship('User', backref=db.backref('create_enterprises', lazy=True), foreign_keys=[create_user_id])
+    create_date = db.Column(db.DateTime)
+    last_modify_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    last_modify_user = db.relationship('User', backref=db.backref('modify_enterprises', lazy=True), foreign_keys=[last_modify_user_id])
+    last_modify_date = db.Column(db.DateTime)
+    approve_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    approve_user = db.relationship('User', backref=db.backref('approve_enterprises', lazy=True), foreign_keys=[approve_user_id])
+    approve_date = db.Column(db.DateTime)
+    approve_state = db.Column(db.Integer)#审批状态
+    maintain_people = db.Column(db.String(1024))#维护人员
+    qualification_docs = db.Column(db.String(10240))#资质文件
+    remark = db.Column(db.Text)#备注
     
-    def to_json(self):
-        create_user_name = self.create_user
-        if self.create_user is not None:
-            cu = User.query.get(self.create_user)
-            if cu is not None:
-                create_user_name = cu.nickname or cu.username
-        approve_user_name = self.approve_user
-        if self.approve_user is not None:
-            au = User.query.get(self.approve_user)
-            if au is not None:
-                approve_user_name = au.nickname or au.username
 
-        enterprise_json = { 'id' : self.id,
-#'name' : self.name,
-#'register_capital' : self.register_capital,
-#'abbr' : self.abbr,
-#'type' : self.type,
-#'ever_name' : self.ever_name,
-#'legal_representor' : self.legal_representor,
-#'location' : self.location,
-#'establish_date' : self.establish_date,
-            'create_user' : create_user_name,
-            'approve_user' : approve_user_name,
-        }
-        if self.accessory:
-            obj = json.loads(self.accessory)
-            for item in obj:
-                enterprise_json[item] = obj[item]
+    def __init__(self, abbr=None, name=None, attribution_location=None, state=None, medical_instrument_business_scope=None, category=None, business_scope=None, contact_person=None, contact_phone_number=None, contact_mobilephone_number=None, location=None, fax_number=None, email=None, website=None, currency_type=None, carriage_way=None, settle_account_way=None, create_user_id=None, create_date=None, approve_user_id=None, approve_date=None, approve_state=None, last_modify_user_id=None, last_modify_date=None, qualification_docs=None, remark=None, maintain_people=None, settle_unit=None):
+        self.abbr = abbr
+        self.name = name
+        self.attribution_location = attribution_location
+        self.state = state
+        self.medical_instrument_business_scope = medical_instrument_business_scope
+        self.category = category
+        self.business_scope = business_scope
+        self.contact_person = contact_person
+        self.contact_phone_number = contact_phone_number
+        self.contact_mobilephone_number  = contact_mobilephone_number
+        self.location = location
+        self.fax_number = fax_number
+        self.email = email
+        self.website = website
+        self.currency_type = currency_type
+        self.carriage_way = carriage_way
+        self.settle_account_way = settle_account_way
+        self.create_user_id = create_user_id
+        self.create_date = create_date
+        self.approve_user_id = approve_user_id
+        self.approve_date = approve_date
+        self.approve_state = approve_state
+        self.qualification_docs = qualification_docs
+        self.remark = remark
+        self.last_modify_user_id = last_modify_user_id
+        self.last_modify_date = last_modify_date
+        self.maintain_people = maintain_people
+        self.settle_unit = settle_unit
+        self.approve_state = 0
+        
+    def to_json(self):
+        enterprise_json = model2json(self, self.__class__)
+        enterprise_json['create_user'] = self.create_user.to_json()
+        if self.approve_user is not None:
+            enterprise_json['approve_user'] = self.approve_user.to_json()
+        enterprise_json['last_modify_user'] = self.last_modify_user.to_json()
         return enterprise_json
     
     @staticmethod
-    def get_headers():
-        headers = {
-            'id' : u'首营企业编号(系统自动分配)',
-            'name' : u'供应商名称',
-            'register_capital' : u'注册资金',
-            'abbr' : u'简称',
-            'type' : u'供应商类型(设备/试剂/耗材等)',
-            'ever_name' : u'曾用名',
-            'legal_representor' : u'法人代表',
-            'location' : u'住所',
-            'establish_date' : u'成立日期'
-        }
-        return headers
-    
+    def json2obj(json_obj):
+        obj = json2model(json_obj, Enterprise)
+        return obj
+
+    def json_modify_obj(self, json_obj):
+        json_modify_model(json_obj, self)
+        
     @staticmethod
     def get_ordered_headers():
         return [
-            ('id', '首营企业编号', 'immutable'),
-            ('简称', '简称'),
-            ('名称', '名称'),
-            ('归属地', '归属地'),
-            ('状态', '状态'),
-            ('医疗器械经营范围', '医疗器械经营范围'),
-            ('分类', '分类'),
-            ('联系人', '联系人'),
-            ('电话', '电话'),
-            ('地址', '地址'),
-            ('经营范围', '经营范围'),
-            ('手机', '手机'),
-            ('传真', '传真'),
-            ('币种', '币种'),
-            ('承运方式', '承运方式'),
-            ('结算方式', '结算方式'),
-            ('邮箱', '邮箱'),
-            ('网址', '网址'),
-            ('备注', '备注'),
-            ('维护人员', '维护人员'),
-            ('结算单位', '结算单位'),
-            ('create_user', '创建人'),
-            ('approve_user', '审核人'),
-            ('filenames', '资质文件'),
+            ('id', u'首营企业编号', 'immutable'),
+            ('abbr', u'简称'),
+            ('name', u'名称'),
+            ('attribution_location', u'归属地'),
+            ('state', u'状态'),
+            ('medical_instrument_business_scope', u'医疗器械经营范围'),
+            ('business_scope', u'经营范围'),
+            ('category', u'分类'),
+            ('contact_person', u'联系人'),
+            ('contact_phone_number', u'电话'),
+            ('contact_mobilephone_number', u'手机'),
+            ('location', u'地址'),
+            ('fax_number', u'传真'),
+            ('email', u'邮箱'),
+            ('website', u'网址'),
+            ('currency_type', u'币种'),
+            ('carriage_way', u'承运方式'),
+            ('settle_account_way', u'结算方式'),
+            ('settle_unit', '结算单位'),
+            ('maintain_people', '维护人员'),
+            ('create_user', u'创建人'),
+            ('create_date', u'创建日期'),
+            ('approve_user', u'审核人'),
+            ('approve_date', u'审核日期'),
+            ('last_modify_user', u'最后修改人'),
+            ('last_modify_date', u'最后修改日期'),
+            ('remark', u'备注'),
+            ('qualification_docs', u'资质文件')
         ]
-#return [('id', u'首营企业编号(系统自动分配)'),
-#('name', u'供应商名称'),
-#('register_capital', u'注册资金'),
-#('abbr', u'简称'),
-#('type', u'供应商类型(设备/试剂/耗材等)', 'option', [u'设备', u'试剂', u'耗材']),
-#('ever_name', u'曾用名'),
-#('legal_representor', u'法人代表'),
-#('location', u'住所'),
-#('establish_date', u'成立日期')
-#]
+
+
 class Customer(db.Model):
     __tablename__ = 'customer'
     id = db.Column(db.Integer, primary_key=True)#客户系统编号

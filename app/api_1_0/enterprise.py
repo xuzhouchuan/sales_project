@@ -8,6 +8,7 @@ from . import api
 from decorators import permission_required
 from errors import bad_request
 import json
+import datetime
 
 @api.route('/enterprise/headers', methods=['GET', 'POST'])
 def get_enterprise_headers():
@@ -48,45 +49,26 @@ def get_enterprise(id):
 @api.route('/enterprise', methods=['POST'])
 @permission_required(Permission.MODULE_PERMISSION_DICT['enterprise']['write'])
 def new_enterprise():
-    enterprise_json = request.get_json()
-    if enterprise_json is None:
+    request_json = request.get_json()
+    if request_json is None:
         return jsonify({
                 'error' : 1,
                 'msg' : u'不是application/json类',
                 'data' : {}
                 }), 403
-    print enterprise_json
     try:
-        name = None #enterprise_json['name']
-        register_capital = enterprise_json.get('register_capital') or 0 
-        abbr = enterprise_json.get('abbr') or None
-        type = enterprise_json.get('type') or None
-        ever_name = enterprise_json.get('ever_name') or None
-        legal_representor = enterprise_json.get('legal_representor') or None
-        location = enterprise_json.get('location') or None
-        establish_date = enterprise_json.get('establish_date') or None
-        create_user = enterprise_json.get('create_user') or None
-        if create_user is None:
-            create_user = g.current_user.id
-        approve_user = enterprise_json.get('approve_user') or None
-        a = {}
-        for item in enterprise_json:
-            print item
-            if item != 'id':
-                a[item] = enterprise_json[item]
-        accessory = json.dumps(a)
-        enterprise = Enterprise(name, register_capital, abbr, type, ever_name, legal_representor, location, establish_date, accessory, create_user, approve_user)
-        try:
-            db.session.add(enterprise)
-            db.session.commit()
-        except Exception, e:
-            print e
-            db.session.rollback()
+        enterprise = Enterprise.json2obj(request_json)
+        enterprise.create_user_id = g.current_user.id
+        enterprise.create_date = datetime.datetime.now()
+        enterprise.last_modify_user_id = g.current_user.id
+        enterprise.last_modify_date = datetime.datetime.now()
+        db.session.add(enterprise)
+        db.session.commit()
     except Exception, e:
         print e
         return jsonify({
                 'error' : 2,
-                'msg' : 'fields not complete or error:name|register_capital|abbr|type|ever_name|legal_representor|location|estabilish_date|accessory',
+                'msg' : 'fields error or add database error',
                 'data' : {}
                 }), 404
     
@@ -107,28 +89,9 @@ def edit_enterprise(id):
                 'msg' : u'不是application/json类',
                 'data' : {}
                 }), 403
-    print enterprise_json
-#if enterprise_json.get('name'):
-#        enterprise.name = enterprise_json['name']
-#    if enterprise_json.get('register_capital'):
-#        enterprise.register_capital = enterprise_json['register_capital']
-#    if enterprise_json.get('abbr'):
-#        enterprise.abbr = enterprise_json['abbr']
-#    if enterprise_json.get('type'):
-#        enterprise.type = enterprise_json['type']
-#    if enterprise_json.get('ever_name'):
-#        enterprise.ever_name = enterprise_json['ever_name']
-#    if enterprise_json.get('legal_representor'):
-#        enterprise.legal_representor = enterprise_json['legal_representor']
-#    if enterprise_json.get('location'):
-#        enterprise.location = enterprise_json['location']
-#    if enterprise_json.get('establish_date'):
-#        enterprise.establish_date = enterprise_json['establish_date']
-    a = {}
-    for item in enterprise_json:
-        if item != 'id' and item != 'create_user' and item != 'approve_user':
-            a[item] = enterprise_json[item]
-    enterprise.accessory = json.dumps(a)
+    enterprise.json_modify_obj(enterprise_json)
+    enterprise.last_modify_user_id = g.current_user.id
+    enterprise.last_modify_date = datetime.datetime.now()
     db.session.commit()
     return jsonify({
             'error' : 0,
@@ -139,6 +102,11 @@ def edit_enterprise(id):
 @api.route('/enterprise/<int:id>', methods=['DELETE'])
 @permission_required(Permission.MODULE_PERMISSION_DICT['enterprise']['approve'])
 def delete_enterprise(id):
+    #TODO 权限判断，结合state判断
+    #审批通过的普通用户不能删除
+    #待审批或审批失败的原用户可以删除
+    #put 也是如此(能修改的只能是已经审批通过的或者审批打回重写的，审批失败的不能修改，但是可以删除)
+    #equipment也是如此
     enterprise = Enterprise.query.get(id)
     if enterprise is None:
         return bad_request('no such a enterprise')
@@ -153,26 +121,13 @@ def delete_enterprise(id):
 @api.route('/enterprise/approve/<int:id>', methods=['GET', 'POST'])
 @permission_required(Permission.MODULE_PERMISSION_DICT['enterprise']['approve'])
 def approve_new_enterprise(id):
-    c = enterprise.query.get(id)
+    c = Enterprise.query.get(id)
     if c is None:
-        return bad_request('no such a customer')
-
-    try:
-        if request:
-            equip_json = request.get_json()
-            if equip_json.get('approve_user') is not None:
-                c.approve_user = equip_json['approve_user']
-        if c.approve_user is None:
-            c.approve_user = g.current_user.id
-    except Exception, e:
-        print e
-        return jsonify({
-                'error' : 1,
-                'msg' : 'approve_user cannot get',
-                'data' : ''
-                })
-
-    c.state = 1
+        return bad_request(u'首营企业不存在')
+    c.approve_user_id = g.current_user.id
+    c.approve_date = datetime.datetime.now()
+    #TODO approve_state设计
+    c.approve_state = 0
     db.session.commit()
     return jsonify({
             'error' : 0,
